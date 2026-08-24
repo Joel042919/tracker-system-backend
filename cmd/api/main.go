@@ -39,6 +39,13 @@ func main() {
 	proyectoTareaHandler := &handlers.ProyectoTareaHandler{DB: db}
 	registroHabitoHandler := &handlers.RegistroHabitoHandler{DB: db}
 	registroTareaHandler := &handlers.RegistroTareaHandler{DB: db}
+	medioHandler := &handlers.MedioHandler{DB: db}
+	categoriaHandler := &handlers.CategoriaHandler{DB: db}
+	movimientoHandler := &handlers.MovimientoHandler{DB: db}
+	egresoFijoHandler := &handlers.EgresoFijoHandler{DB: db}
+	pagoProgramadoHandler := &handlers.PagoProgramadoHandler{DB: db}
+	presupuestoHandler := &handlers.PresupuestoHandler{DB: db}
+	alertaPagoHandler := &handlers.AlertaPagoHandler{DB: db}
 
 	//Ejecutar migraciones
 	/*if err := db.Migrate(); err != nil {
@@ -173,6 +180,55 @@ func main() {
 	mux.HandleFunc("GET /api/registro-tareas/{id}", registroTareaHandler.GetByID)
 	mux.HandleFunc("PUT /api/registro-tareas/{id}", registroTareaHandler.Update)
 	mux.HandleFunc("DELETE /api/registro-tareas/{id}", registroTareaHandler.Delete)
+
+	// Medios & Saldos
+	mux.HandleFunc("POST /api/medios", medioHandler.Create)
+	mux.HandleFunc("GET /api/medios", medioHandler.GetAll)
+	mux.HandleFunc("GET /api/medios/{id}", medioHandler.GetByID)
+	mux.HandleFunc("PUT /api/medios/{id}", medioHandler.Update)
+	mux.HandleFunc("PUT /api/medios/{id}/saldo", medioHandler.SetSaldo)
+	mux.HandleFunc("DELETE /api/medios/{id}", medioHandler.Delete)
+
+	// Categorias
+	mux.HandleFunc("POST /api/categorias", categoriaHandler.Create)
+	mux.HandleFunc("GET /api/categorias", categoriaHandler.GetAll)
+	mux.HandleFunc("GET /api/categorias/{id}", categoriaHandler.GetByID)
+	mux.HandleFunc("PUT /api/categorias/{id}", categoriaHandler.Update)
+	mux.HandleFunc("DELETE /api/categorias/{id}", categoriaHandler.Delete)
+
+	// Movimientos
+	mux.HandleFunc("POST /api/movimientos", movimientoHandler.Create)
+	mux.HandleFunc("GET /api/movimientos", movimientoHandler.GetAll)
+	mux.HandleFunc("GET /api/movimientos/{id}", movimientoHandler.GetByID)
+	mux.HandleFunc("PUT /api/movimientos/{id}", movimientoHandler.Update)
+	mux.HandleFunc("DELETE /api/movimientos/{id}", movimientoHandler.Delete)
+
+	// Egresos Fijos
+	mux.HandleFunc("POST /api/egresos-fijos", egresoFijoHandler.Create)
+	mux.HandleFunc("GET /api/egresos-fijos", egresoFijoHandler.GetAll)
+	mux.HandleFunc("GET /api/egresos-fijos/{id}", egresoFijoHandler.GetByID)
+	mux.HandleFunc("PUT /api/egresos-fijos/{id}", egresoFijoHandler.Update)
+	mux.HandleFunc("DELETE /api/egresos-fijos/{id}", egresoFijoHandler.Delete)
+
+	// Pagos Programados
+	mux.HandleFunc("POST /api/pagos-programados", pagoProgramadoHandler.Create)
+	mux.HandleFunc("GET /api/pagos-programados", pagoProgramadoHandler.GetAll)
+	mux.HandleFunc("GET /api/pagos-programados/{id}", pagoProgramadoHandler.GetByID)
+	mux.HandleFunc("POST /api/pagos-programados/{id}/pagar", pagoProgramadoHandler.Pagar)
+	mux.HandleFunc("DELETE /api/pagos-programados/{id}", pagoProgramadoHandler.Delete)
+
+	// Presupuestos
+	mux.HandleFunc("POST /api/presupuestos", presupuestoHandler.Create)
+	mux.HandleFunc("GET /api/presupuestos", presupuestoHandler.GetAll)
+	mux.HandleFunc("GET /api/presupuestos/{id}", presupuestoHandler.GetByID)
+	mux.HandleFunc("PUT /api/presupuestos/{id}", presupuestoHandler.Update)
+	mux.HandleFunc("DELETE /api/presupuestos/{id}", presupuestoHandler.Delete)
+
+	// Alertas de Pago
+	mux.HandleFunc("POST /api/alertas-pago", alertaPagoHandler.Create)
+	mux.HandleFunc("GET /api/alertas-pago", alertaPagoHandler.GetAll)
+	mux.HandleFunc("PUT /api/alertas-pago/{id}/leida", alertaPagoHandler.MarcarLeida)
+	mux.HandleFunc("DELETE /api/alertas-pago/{id}", alertaPagoHandler.Delete)
 
 	// CORS middleware
 	corsMiddleware := func(next http.Handler) http.Handler {

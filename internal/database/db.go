@@ -220,6 +220,89 @@ func (db *DB) Migrate() error {
 		fiber INT,
 		created_at TIMESTAMPTZ DEFAULT now()
 		);
+
+		CREATE TABLE medio (
+		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+		medio VARCHAR(50) NOT NULL,
+		tipo_medio VARCHAR(50) NOT NULL,
+		numero_cuenta VARCHAR(50),
+		banco VARCHAR(50),
+		estado BOOLEAN DEFAULT true,
+		created_at TIMESTAMPTZ DEFAULT now()
+		);
+
+		CREATE TABLE saldo_actual (
+		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+		saldo DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+		medio_id UUID NOT NULL UNIQUE REFERENCES medio(id) ON DELETE CASCADE
+		);
+
+		CREATE TABLE categoria (
+		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+		categoria VARCHAR(30) NOT NULL
+		);
+
+		CREATE TABLE egreso_fijo (
+		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+		razon VARCHAR(50) NOT NULL,
+		descripcion TEXT,
+		categoria_id UUID REFERENCES categoria(id) ON DELETE SET NULL,
+		monto DECIMAL(10,2) NOT NULL,
+		programacion_pago JSONB NOT NULL,
+		recordatorio_dias_antes INT DEFAULT 3,
+		activo BOOLEAN DEFAULT true,
+		fecha_inicio DATE,
+		fecha_fin DATE,
+		created_at TIMESTAMPTZ DEFAULT now()
+		);
+
+		CREATE TABLE movimiento (
+		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+		medio_id UUID NOT NULL REFERENCES medio(id) ON DELETE CASCADE,
+		categoria_id UUID REFERENCES categoria(id) ON DELETE SET NULL,
+		tipo CHAR(1) NOT NULL CHECK (tipo IN ('I', 'E')),
+		fecha_movimiento TIMESTAMPTZ NOT NULL DEFAULT now(),
+		descripcion TEXT,
+		monto DECIMAL(10,2) NOT NULL,
+		egreso_fijo_id UUID REFERENCES egreso_fijo(id) ON DELETE SET NULL,
+		created_at TIMESTAMPTZ DEFAULT now()
+		);
+
+		CREATE TABLE pago_programado (
+		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+		egreso_fijo_id UUID NOT NULL REFERENCES egreso_fijo(id) ON DELETE CASCADE,
+		fecha_programada DATE NOT NULL,
+		monto_esperado DECIMAL(10,2) NOT NULL,
+		estado VARCHAR(20) DEFAULT 'pendiente',
+		fecha_pago TIMESTAMPTZ,
+		medio_id UUID REFERENCES medio(id) ON DELETE SET NULL,
+		movimiento_id UUID REFERENCES movimiento(id) ON DELETE SET NULL,
+		notas TEXT,
+		created_at TIMESTAMPTZ DEFAULT now(),
+		UNIQUE (egreso_fijo_id, fecha_programada)
+		);
+
+		CREATE TABLE presupuesto (
+		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+		nombre VARCHAR(100) NOT NULL,
+		categoria_id UUID REFERENCES categoria(id) ON DELETE SET NULL,
+		monto_limite DECIMAL(10,2) NOT NULL,
+		periodo VARCHAR(20) NOT NULL,
+		fecha_inicio DATE NOT NULL,
+		fecha_fin DATE,
+		activo BOOLEAN DEFAULT true,
+		created_at TIMESTAMPTZ DEFAULT now()
+		);
+
+		CREATE TABLE alerta_pago (
+		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+		pago_programado_id UUID NOT NULL REFERENCES pago_programado(id) ON DELETE CASCADE,
+		tipo_alerta VARCHAR(20) NOT NULL,
+		mensaje TEXT NOT NULL,
+		leida BOOLEAN DEFAULT false,
+		fecha_alerta TIMESTAMPTZ DEFAULT now(),
+		created_at TIMESTAMPTZ DEFAULT now()
+		);
 	`
 	_, err := db.Pool.Exec(context.Background(), schema)
 	if err != nil {
