@@ -35,6 +35,10 @@ func main() {
 	macrosHandler := &handlers.MacrosHandler{DB: db}
 	dayliHandler := &handlers.DayliTrackHandler{DB: db}
 	foodLogHandler := &handlers.FoodLogHandler{DB: db}
+	proyectoHabitoHandler := &handlers.ProyectoHabitoHandler{DB: db}
+	proyectoTareaHandler := &handlers.ProyectoTareaHandler{DB: db}
+	registroHabitoHandler := &handlers.RegistroHabitoHandler{DB: db}
+	registroTareaHandler := &handlers.RegistroTareaHandler{DB: db}
 
 	//Ejecutar migraciones
 	/*if err := db.Migrate(); err != nil {
@@ -141,6 +145,34 @@ func main() {
 	mux.HandleFunc("GET /api/food-logs/{id}", foodLogHandler.GetFoodLog)
 	mux.HandleFunc("PUT /api/food-logs/{id}", foodLogHandler.UpdateFoodLog)
 	mux.HandleFunc("DELETE /api/food-logs/{id}", foodLogHandler.DeleteFoodLog)
+
+	// Proyecto Habitos
+	mux.HandleFunc("POST /api/proyecto-habitos", proyectoHabitoHandler.Create)
+	mux.HandleFunc("GET /api/proyecto-habitos", proyectoHabitoHandler.GetAll)
+	mux.HandleFunc("GET /api/proyecto-habitos/{id}", proyectoHabitoHandler.GetByID)
+	mux.HandleFunc("PUT /api/proyecto-habitos/{id}", proyectoHabitoHandler.Update)
+	mux.HandleFunc("DELETE /api/proyecto-habitos/{id}", proyectoHabitoHandler.Delete)
+
+	// Proyecto Tareas (Mini-tareas)
+	mux.HandleFunc("POST /api/proyecto-tareas", proyectoTareaHandler.Create)
+	mux.HandleFunc("GET /api/proyecto-tareas", proyectoTareaHandler.GetAll)
+	mux.HandleFunc("GET /api/proyecto-tareas/{id}", proyectoTareaHandler.GetByID)
+	mux.HandleFunc("PUT /api/proyecto-tareas/{id}", proyectoTareaHandler.Update)
+	mux.HandleFunc("DELETE /api/proyecto-tareas/{id}", proyectoTareaHandler.Delete)
+
+	// Registro Habitos (Tracking Diario)
+	mux.HandleFunc("POST /api/registro-habitos", registroHabitoHandler.Create)
+	mux.HandleFunc("GET /api/registro-habitos", registroHabitoHandler.GetAll)
+	mux.HandleFunc("GET /api/registro-habitos/{id}", registroHabitoHandler.GetByID)
+	mux.HandleFunc("PUT /api/registro-habitos/{id}", registroHabitoHandler.Update)
+	mux.HandleFunc("DELETE /api/registro-habitos/{id}", registroHabitoHandler.Delete)
+
+	// Registro Tareas (Completitud de Mini-tareas)
+	mux.HandleFunc("POST /api/registro-tareas", registroTareaHandler.Create)
+	mux.HandleFunc("GET /api/registro-tareas", registroTareaHandler.GetAll)
+	mux.HandleFunc("GET /api/registro-tareas/{id}", registroTareaHandler.GetByID)
+	mux.HandleFunc("PUT /api/registro-tareas/{id}", registroTareaHandler.Update)
+	mux.HandleFunc("DELETE /api/registro-tareas/{id}", registroTareaHandler.Delete)
 
 	// CORS middleware
 	corsMiddleware := func(next http.Handler) http.Handler {

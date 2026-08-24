@@ -111,11 +111,61 @@ func (db *DB) Migrate() error {
 		created_at TIMESTAMPTZ DEFAULT now()
 		);
 
+		CREATE TABLE proyecto_habito (
+		id SERIAL PRIMARY KEY,
+		id_proyecto INT NOT NULL REFERENCES proyecto(id),
+		dias_semana JSONB NOT NULL,
+		hora_objetivo TIME,
+		points_por_completar INT NOT NULL DEFAULT 10,
+		record_streak INT DEFAULT 0,
+		best_streak INT DEFAULT 0,
+		ultima_fecha_completada DATE,
+		activo BOOLEAN DEFAULT true,
+		created_at TIMESTAMPTZ DEFAULT now()
+		);
+
+		CREATE TABLE proyecto_tarea (
+		id SERIAL PRIMARY KEY,
+		id_proyecto_habito INT NOT NULL REFERENCES proyecto_habito(id),
+		nombre VARCHAR(100) NOT NULL,
+		descripcion TEXT,
+		tiempo_estimado_minutos INT NOT NULL,
+		orden INT NOT NULL,
+		activo BOOLEAN DEFAULT true,
+		created_at TIMESTAMPTZ DEFAULT now()
+		);
+
+		CREATE TABLE registro_habito (
+		id SERIAL PRIMARY KEY,
+		id_proyecto_habito INT NOT NULL REFERENCES proyecto_habito(id),
+		fecha DATE NOT NULL,
+		completado BOOLEAN DEFAULT false,
+		fecha_completado TIMESTAMPTZ,
+		points_ganados INT DEFAULT 0,
+		streak_actual INT DEFAULT 0,
+		notas TEXT,
+		created_at TIMESTAMPTZ DEFAULT now(),
+		UNIQUE (id_proyecto_habito, fecha)
+		);
+
+		CREATE TABLE registro_tarea (
+		id SERIAL PRIMARY KEY,
+		id_proyecto_tarea INT NOT NULL REFERENCES proyecto_tarea(id),
+		id_registro_habito INT NOT NULL REFERENCES registro_habito(id),
+		completado BOOLEAN DEFAULT false,
+		fecha_completado TIMESTAMPTZ,
+		tiempo_real_minutos INT,
+		created_at TIMESTAMPTZ DEFAULT now(),
+		UNIQUE (id_registro_habito, id_proyecto_tarea)
+		);
+
 		CREATE TABLE puntos_ganados (
 		id SERIAL PRIMARY KEY,
 		id_registro_evaluacion INT REFERENCES registro_evaluacion(id),
 		id_task INT REFERENCES task(id),
+		id_registro_habito INT REFERENCES registro_habito(id),
 		points INT NOT NULL,
+		tipo_origen VARCHAR(20) NOT NULL DEFAULT 'evaluacion',
 		fecha_registro TIMESTAMPTZ DEFAULT now()
 		);
 

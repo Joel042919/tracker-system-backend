@@ -18,11 +18,13 @@ type PuntosGanadosHandler struct {
 type inputPuntosGanados struct {
 	IDRegistroEvaluacion *int    `json:"id_registro_evaluacion"` // opcional
 	IDTask               *int    `json:"id_task"`                // opcional
+	IDRegistroHabito     *int    `json:"id_registro_habito"`     // opcional
 	Points               int     `json:"points"`
-	FechaRegistro        *string `json:"fecha_registro"` // opcional, formato ISO8601
+	TipoOrigen           string  `json:"tipo_origen"`            // 'evaluacion', 'task', 'habito'
+	FechaRegistro        *string `json:"fecha_registro"`         // opcional, formato ISO8601
 }
 
-func parsePuntosGanadosInput(in inputPuntosGanados) (*int, *int, int, time.Time, error) {
+func parsePuntosGanadosInput(in inputPuntosGanados) (*int, *int, *int, int, string, time.Time, error) {
 	var fecha time.Time
 	if in.FechaRegistro != nil && *in.FechaRegistro != "" {
 		var err error
@@ -30,14 +32,25 @@ func parsePuntosGanadosInput(in inputPuntosGanados) (*int, *int, int, time.Time,
 		if err != nil {
 			fecha, err = time.Parse("2006-01-02T15:04:05", *in.FechaRegistro)
 			if err != nil {
-				return nil, nil, 0, time.Time{}, errors.New("fecha_registro inválida, use formato ISO8601")
+				return nil, nil, nil, 0, "", time.Time{}, errors.New("fecha_registro inválida, use formato ISO8601")
 			}
 		}
 	} else {
 		fecha = time.Now()
 	}
 
-	return in.IDRegistroEvaluacion, in.IDTask, in.Points, fecha, nil
+	tipoOrigen := in.TipoOrigen
+	if tipoOrigen == "" {
+		if in.IDRegistroHabito != nil {
+			tipoOrigen = "habito"
+		} else if in.IDTask != nil {
+			tipoOrigen = "task"
+		} else {
+			tipoOrigen = "evaluacion"
+		}
+	}
+
+	return in.IDRegistroEvaluacion, in.IDTask, in.IDRegistroHabito, in.Points, tipoOrigen, fecha, nil
 }
 
 // Create maneja POST /api/puntos-ganados
@@ -48,13 +61,13 @@ func (h *PuntosGanadosHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	idRegEv, idTask, points, fecha, err := parsePuntosGanadosInput(input)
+	idRegEv, idTask, idRegHab, points, tipoOrigen, fecha, err := parsePuntosGanadosInput(input)
 	if err != nil {
 		http.Error(w, `{"error": "`+err.Error()+`"}`, http.StatusBadRequest)
 		return
 	}
 
-	id, err := h.DB.CreatePuntosGanados(r.Context(), idRegEv, idTask, points, fecha)
+	id, err := h.DB.CreatePuntosGanados(r.Context(), idRegEv, idTask, idRegHab, points, tipoOrigen, fecha)
 	if err != nil {
 		http.Error(w, `{"error": "Error interno al crear registro de puntos ganados"}`, http.StatusInternalServerError)
 		return
@@ -114,7 +127,7 @@ func (h *PuntosGanadosHandler) UpdatePuntosGanado(w http.ResponseWriter, r *http
 		return
 	}
 
-	idRegEv, idTask, points, fecha, err := parsePuntosGanadosInput(input)
+	idRegEv, idTask, idRegHab, points, tipoOrigen, fecha, err := parsePuntosGanadosInput(input)
 	if err != nil {
 		http.Error(w, `{"error": "`+err.Error()+`"}`, http.StatusBadRequest)
 		return
@@ -127,14 +140,11 @@ func (h *PuntosGanadosHandler) UpdatePuntosGanado(w http.ResponseWriter, r *http
 		return
 	}
 
-	updatedID, err := h.DB.UpdatePuntosGanados(r.Context(), idNum, idRegEv, idTask, points, fecha)
+	updatedID, err := h.DB.UpdatePuntosGanados(r.Context(), idNum, idRegEv, idTask, idRegHab, points, tipoOrigen, fecha)
 	if err != nil {
 		http.Error(w, `{"error": "Error interno al actualizar registro o registro no encontrado"}`, http.StatusInternalServerError)
 		return
 	}
-
-	// NOTA: Para Update, si cambia el monto de puntos habría que calcular la diferencia y llamar UpdateTotalPoints,
-	// pero por simplicidad de uso asumimos que los puntos no suelen modificarse o no se cuenta aquí.
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
