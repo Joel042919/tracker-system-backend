@@ -47,10 +47,10 @@ func main() {
 	presupuestoHandler := &handlers.PresupuestoHandler{DB: db}
 	alertaPagoHandler := &handlers.AlertaPagoHandler{DB: db}
 
-	//Ejecutar migraciones
-	/*if err := db.Migrate(); err != nil {
-		log.Fatalf("Error en migración: %v", err)
-	}*/
+	// Ejecutar migraciones
+	if err := db.Migrate(); err != nil {
+		log.Printf("Aviso en migración: %v", err)
+	}
 	mux := http.NewServeMux()
 
 	// Point Review

@@ -28,7 +28,7 @@ type SaldoActual struct {
 }
 
 // CreateMedio inserta un nuevo medio y su saldo inicial en una sola transacción
-func (db *DB) CreateMedio(ctx context.Context, nombre, tipoMedio string, numeroCuenta, banco *string, saldoInicial float64) (string, error) {
+func (db *DB) CreateMedio(ctx context.Context, id *string, nombre, tipoMedio string, numeroCuenta, banco *string, saldoInicial float64) (string, error) {
 	tx, err := db.Pool.Begin(ctx)
 	if err != nil {
 		return "", err
@@ -36,16 +36,29 @@ func (db *DB) CreateMedio(ctx context.Context, nombre, tipoMedio string, numeroC
 	defer tx.Rollback(ctx)
 
 	var medioID string
-	medioQuery := `INSERT INTO medio (medio, tipo_medio, numero_cuenta, banco)
-		VALUES ($1, $2, $3, $4) RETURNING id`
-
-	err = tx.QueryRow(ctx, medioQuery, nombre, tipoMedio, numeroCuenta, banco).Scan(&medioID)
+	var medioQuery string
+	if id != nil && *id != "" {
+		medioQuery = `INSERT INTO medio (id, medio, tipo_medio, numero_cuenta, banco)
+			VALUES ($1, $2, $3, $4, $5)
+			ON CONFLICT (id) DO UPDATE SET medio = EXCLUDED.medio, tipo_medio = EXCLUDED.tipo_medio, numero_cuenta = EXCLUDED.numero_cuenta, banco = EXCLUDED.banco
+			RETURNING id`
+		err = tx.QueryRow(ctx, medioQuery, *id, nombre, tipoMedio, numeroCuenta, banco).Scan(&medioID)
+	} else {
+		medioQuery = `INSERT INTO medio (medio, tipo_medio, numero_cuenta, banco)
+			VALUES ($1, $2, $3, $4) RETURNING id`
+		err = tx.QueryRow(ctx, medioQuery, nombre, tipoMedio, numeroCuenta, banco).Scan(&medioID)
+	}
 	if err != nil {
 		return "", fmt.Errorf("error al insertar medio: %w", err)
 	}
 
-	saldoQuery := `INSERT INTO saldo_actual (saldo, medio_id) VALUES ($1, $2)`
-	_, err = tx.Exec(ctx, saldoQuery, saldoInicial, medioID)
+	var saldoExists bool
+	_ = tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM saldo_actual WHERE medio_id = $1::uuid)", medioID).Scan(&saldoExists)
+	if saldoExists {
+		_, err = tx.Exec(ctx, "UPDATE saldo_actual SET saldo = $1 WHERE medio_id = $2::uuid", saldoInicial, medioID)
+	} else {
+		_, err = tx.Exec(ctx, "INSERT INTO saldo_actual (id, saldo, medio_id) VALUES (gen_random_uuid(), $1, $2::uuid)", saldoInicial, medioID)
+	}
 	if err != nil {
 		return "", fmt.Errorf("error al inicializar saldo_actual: %w", err)
 	}
@@ -121,10 +134,13 @@ func (db *DB) UpdateMedio(ctx context.Context, id string, nombre, tipoMedio stri
 
 // SetSaldoMedio permite ajustar manualmente el saldo de un medio
 func (db *DB) SetSaldoMedio(ctx context.Context, medioID string, nuevoSaldo float64) error {
-	query := `INSERT INTO saldo_actual (saldo, medio_id) VALUES ($1, $2)
-		ON CONFLICT (medio_id) DO UPDATE SET saldo = EXCLUDED.saldo`
-
-	_, err := db.Pool.Exec(ctx, query, nuevoSaldo, medioID)
+	var saldoExists bool
+	_ = db.Pool.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM saldo_actual WHERE medio_id = $1::uuid)", medioID).Scan(&saldoExists)
+	if saldoExists {
+		_, err := db.Pool.Exec(ctx, "UPDATE saldo_actual SET saldo = $1 WHERE medio_id = $2::uuid", nuevoSaldo, medioID)
+		return err
+	}
+	_, err := db.Pool.Exec(ctx, "INSERT INTO saldo_actual (id, saldo, medio_id) VALUES (gen_random_uuid(), $1, $2::uuid)", nuevoSaldo, medioID)
 	return err
 }
 

@@ -14,11 +14,20 @@ type Categoria struct {
 }
 
 // CreateCategoria inserta una nueva categoría
-func (db *DB) CreateCategoria(ctx context.Context, nombre string) (string, error) {
-	query := `INSERT INTO categoria (categoria) VALUES ($1) RETURNING id`
-	var id string
-	err := db.Pool.QueryRow(ctx, query, nombre).Scan(&id)
-	return id, err
+func (db *DB) CreateCategoria(ctx context.Context, id *string, nombre string) (string, error) {
+	var catID string
+	var query string
+	var err error
+	if id != nil && *id != "" {
+		query = `INSERT INTO categoria (id, categoria) VALUES ($1, $2)
+			ON CONFLICT (id) DO UPDATE SET categoria = EXCLUDED.categoria
+			RETURNING id`
+		err = db.Pool.QueryRow(ctx, query, *id, nombre).Scan(&catID)
+	} else {
+		query = `INSERT INTO categoria (categoria) VALUES ($1) RETURNING id`
+		err = db.Pool.QueryRow(ctx, query, nombre).Scan(&catID)
+	}
+	return catID, err
 }
 
 // GetCategorias obtiene todas las categorías ordenadas alfabéticamente

@@ -11,7 +11,8 @@ type CategoriaHandler struct {
 }
 
 type inputCategoria struct {
-	Categoria string `json:"categoria"`
+	ID        *string `json:"id"`
+	Categoria string  `json:"categoria"`
 }
 
 // Create maneja POST /api/categorias
@@ -27,7 +28,7 @@ func (h *CategoriaHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	id, err := h.DB.CreateCategoria(r.Context(), input.Categoria)
+	id, err := h.DB.CreateCategoria(r.Context(), input.ID, input.Categoria)
 	if err != nil {
 		http.Error(w, `{"error": "`+err.Error()+`"}`, http.StatusInternalServerError)
 		return

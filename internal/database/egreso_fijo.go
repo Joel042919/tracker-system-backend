@@ -27,30 +27,38 @@ type EgresoFijo struct {
 }
 
 // CreateEgresoFijo inserta un egreso fijo y genera pagos programados iniciales
-func (db *DB) CreateEgresoFijo(ctx context.Context, razon string, descripcion, categoriaID *string, monto float64, programacionPago string, recordatorioDias int, fechaInicio, fechaFin *time.Time) (string, error) {
+func (db *DB) CreateEgresoFijo(ctx context.Context, id *string, razon string, descripcion, categoriaID *string, monto float64, programacionPago string, recordatorioDias int, fechaInicio, fechaFin *time.Time) (string, error) {
 	tx, err := db.Pool.Begin(ctx)
 	if err != nil {
 		return "", err
 	}
 	defer tx.Rollback(ctx)
 
-	var id string
-	query := `INSERT INTO egreso_fijo (razon, descripcion, categoria_id, monto, programacion_pago, recordatorio_dias_antes, fecha_inicio, fecha_fin)
-		VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8) RETURNING id`
-
-	err = tx.QueryRow(ctx, query, razon, descripcion, categoriaID, monto, programacionPago, recordatorioDias, fechaInicio, fechaFin).Scan(&id)
+	var efID string
+	var query string
+	if id != nil && *id != "" {
+		query = `INSERT INTO egreso_fijo (id, razon, descripcion, categoria_id, monto, programacion_pago, recordatorio_dias_antes, fecha_inicio, fecha_fin)
+			VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9)
+			ON CONFLICT (id) DO UPDATE SET razon = EXCLUDED.razon, descripcion = EXCLUDED.descripcion, categoria_id = EXCLUDED.categoria_id, monto = EXCLUDED.monto, programacion_pago = EXCLUDED.programacion_pago, recordatorio_dias_antes = EXCLUDED.recordatorio_dias_antes
+			RETURNING id`
+		err = tx.QueryRow(ctx, query, *id, razon, descripcion, categoriaID, monto, programacionPago, recordatorioDias, fechaInicio, fechaFin).Scan(&efID)
+	} else {
+		query = `INSERT INTO egreso_fijo (razon, descripcion, categoria_id, monto, programacion_pago, recordatorio_dias_antes, fecha_inicio, fecha_fin)
+			VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8) RETURNING id`
+		err = tx.QueryRow(ctx, query, razon, descripcion, categoriaID, monto, programacionPago, recordatorioDias, fechaInicio, fechaFin).Scan(&efID)
+	}
 	if err != nil {
 		return "", fmt.Errorf("error al insertar egreso_fijo: %w", err)
 	}
 
 	// Generar pagos programados iniciales (próximos 3 meses o según fechas)
-	generarPagosProgramados(ctx, tx, id, monto, programacionPago, recordatorioDias, fechaInicio, fechaFin)
+	generarPagosProgramados(ctx, tx, efID, monto, programacionPago, recordatorioDias, fechaInicio, fechaFin)
 
 	if err := tx.Commit(ctx); err != nil {
 		return "", err
 	}
 
-	return id, nil
+	return efID, nil
 }
 
 // Genera pagos programados y alertas automáticas

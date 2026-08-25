@@ -22,23 +22,61 @@ type Movimiento struct {
 }
 
 // CreateMovimiento inserta un nuevo movimiento y actualiza atómicamente el saldo en saldo_actual
-func (db *DB) CreateMovimiento(ctx context.Context, medioID string, categoriaID *string, tipo string, fechaMovimiento time.Time, descripcion *string, monto float64, egresoFijoID *string) (string, error) {
+func (db *DB) CreateMovimiento(ctx context.Context, id *string, medioID string, categoriaID *string, tipo string, fechaMovimiento time.Time, descripcion *string, monto float64, egresoFijoID *string) (string, error) {
 	tx, err := db.Pool.Begin(ctx)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("error iniciando transacción: %w", err)
 	}
 	defer tx.Rollback(ctx)
 
-	var movID string
-	query := `INSERT INTO movimiento (medio_id, categoria_id, tipo, fecha_movimiento, descripcion, monto, egreso_fijo_id)
-		VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`
+	// 1. Asegurar que medioID existe en la base de datos para no violar FK
+	var medioExists bool
+	_ = tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM medio WHERE id = $1::uuid)", medioID).Scan(&medioExists)
+	if !medioExists {
+		_, err = tx.Exec(ctx, "INSERT INTO medio (id, medio, tipo_medio) VALUES ($1::uuid, 'Cuenta', 'efectivo') ON CONFLICT (id) DO NOTHING", medioID)
+		if err != nil {
+			return "", fmt.Errorf("error asegurando medio: %w", err)
+		}
+	}
 
-	err = tx.QueryRow(ctx, query, medioID, categoriaID, tipo, fechaMovimiento, descripcion, monto, egresoFijoID).Scan(&movID)
+	// 2. Si categoriaID está presente, validar que exista en categoria para no violar FK
+	var cleanCategoriaID *string
+	if categoriaID != nil && *categoriaID != "" {
+		var catExists bool
+		_ = tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM categoria WHERE id = $1::uuid)", *categoriaID).Scan(&catExists)
+		if !catExists {
+			_, err = tx.Exec(ctx, "INSERT INTO categoria (id, categoria) VALUES ($1::uuid, 'General') ON CONFLICT (id) DO NOTHING", *categoriaID)
+			if err == nil {
+				cleanCategoriaID = categoriaID
+			}
+		} else {
+			cleanCategoriaID = categoriaID
+		}
+	}
+
+	var movID string
+	var query string
+	if id != nil && *id != "" {
+		query = `INSERT INTO movimiento (id, medio_id, categoria_id, tipo, fecha_movimiento, descripcion, monto, egreso_fijo_id)
+			VALUES ($1::uuid, $2::uuid, NULLIF($3, '')::uuid, $4, $5, $6, $7, NULLIF($8, '')::uuid)
+			ON CONFLICT (id) DO NOTHING
+			RETURNING id`
+		err = tx.QueryRow(ctx, query, *id, medioID, cleanCategoriaID, tipo, fechaMovimiento, descripcion, monto, egresoFijoID).Scan(&movID)
+		if errors.Is(err, sql.ErrNoRows) || movID == "" {
+			// Ya existía el movimiento
+			_ = tx.Commit(ctx)
+			return *id, nil
+		}
+	} else {
+		query = `INSERT INTO movimiento (medio_id, categoria_id, tipo, fecha_movimiento, descripcion, monto, egreso_fijo_id)
+			VALUES ($1::uuid, NULLIF($2, '')::uuid, $3, $4, $5, $6, NULLIF($7, '')::uuid) RETURNING id`
+		err = tx.QueryRow(ctx, query, medioID, cleanCategoriaID, tipo, fechaMovimiento, descripcion, monto, egresoFijoID).Scan(&movID)
+	}
 	if err != nil {
 		return "", fmt.Errorf("error al insertar movimiento: %w", err)
 	}
 
-	// Ajuste de saldo
+	// Ajuste de saldo en saldo_actual
 	var delta float64
 	if tipo == "I" {
 		delta = monto
@@ -46,16 +84,19 @@ func (db *DB) CreateMovimiento(ctx context.Context, medioID string, categoriaID 
 		delta = -monto
 	}
 
-	saldoQuery := `INSERT INTO saldo_actual (saldo, medio_id) VALUES ($1, $2)
-		ON CONFLICT (medio_id) DO UPDATE SET saldo = saldo_actual.saldo + EXCLUDED.saldo`
-
-	_, err = tx.Exec(ctx, saldoQuery, delta, medioID)
+	var saldoExists bool
+	_ = tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM saldo_actual WHERE medio_id = $1::uuid)", medioID).Scan(&saldoExists)
+	if saldoExists {
+		_, err = tx.Exec(ctx, "UPDATE saldo_actual SET saldo = saldo + $1 WHERE medio_id = $2::uuid", delta, medioID)
+	} else {
+		_, err = tx.Exec(ctx, "INSERT INTO saldo_actual (id, saldo, medio_id) VALUES (gen_random_uuid(), $1, $2::uuid)", delta, medioID)
+	}
 	if err != nil {
 		return "", fmt.Errorf("error al actualizar saldo_actual: %w", err)
 	}
 
 	if err := tx.Commit(ctx); err != nil {
-		return "", err
+		return "", fmt.Errorf("error haciendo commit: %w", err)
 	}
 
 	return movID, nil

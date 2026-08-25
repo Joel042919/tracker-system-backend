@@ -12,6 +12,7 @@ type PagoProgramadoHandler struct {
 }
 
 type inputPagoProgramado struct {
+	ID              *string `json:"id"`
 	EgresoFijoID    string  `json:"egreso_fijo_id"`
 	FechaProgramada string  `json:"fecha_programada"`
 	MontoEsperado   float64 `json:"monto_esperado"`
@@ -43,7 +44,7 @@ func (h *PagoProgramadoHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	id, err := h.DB.CreatePagoProgramado(r.Context(), input.EgresoFijoID, fecha, input.MontoEsperado, input.Notas)
+	id, err := h.DB.CreatePagoProgramado(r.Context(), input.ID, input.EgresoFijoID, fecha, input.MontoEsperado, input.Notas)
 	if err != nil {
 		http.Error(w, `{"error": "`+err.Error()+`"}`, http.StatusInternalServerError)
 		return

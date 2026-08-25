@@ -12,13 +12,14 @@ type PresupuestoHandler struct {
 }
 
 type inputPresupuesto struct {
-	Nombre      string  `json:"nombre"`
-	CategoriaID *string `json:"categoria_id"`
-	MontoLimite float64 `json:"monto_limite"`
-	Periodo     string  `json:"periodo"` // 'diario', 'semanal', 'mensual', 'anual'
-	FechaInicio string  `json:"fecha_inicio"`
-	FechaFin    *string `json:"fecha_fin"`
-	Activo      *bool   `json:"activo"`
+	ID          *string                `json:"id"`
+	Nombre      string                 `json:"nombre"`
+	CategoriaID *string                `json:"categoria_id"`
+	MontoLimite float64                `json:"monto_limite"`
+	Periodo     string                 `json:"periodo"` // 'diario', 'semanal', 'mensual', 'anual'
+	FechaInicio string                 `json:"fecha_inicio"`
+	FechaFin    *string                `json:"fecha_fin"`
+	Activo      *database.FlexibleBool `json:"activo"`
 }
 
 // Create maneja POST /api/presupuestos
@@ -42,7 +43,7 @@ func (h *PresupuestoHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	fechaFin := parseOptionalDate(input.FechaFin)
 
-	id, err := h.DB.CreatePresupuesto(r.Context(), input.Nombre, input.CategoriaID, input.MontoLimite, input.Periodo, fechaInicio, fechaFin)
+	id, err := h.DB.CreatePresupuesto(r.Context(), input.ID, input.Nombre, input.CategoriaID, input.MontoLimite, input.Periodo, fechaInicio, fechaFin)
 	if err != nil {
 		http.Error(w, `{"error": "`+err.Error()+`"}`, http.StatusInternalServerError)
 		return
@@ -115,7 +116,7 @@ func (h *PresupuestoHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	activo := true
 	if input.Activo != nil {
-		activo = *input.Activo
+		activo = input.Activo.Bool()
 	}
 
 	updatedID, err := h.DB.UpdatePresupuesto(r.Context(), id, input.Nombre, input.CategoriaID, input.MontoLimite, input.Periodo, fechaInicio, fechaFin, activo)

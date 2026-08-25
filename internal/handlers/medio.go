@@ -11,12 +11,13 @@ type MedioHandler struct {
 }
 
 type inputMedio struct {
-	Medio        string   `json:"medio"`
-	TipoMedio    string   `json:"tipo_medio"`
-	NumeroCuenta *string  `json:"numero_cuenta"`
-	Banco        *string  `json:"banco"`
-	SaldoInicial *float64 `json:"saldo_inicial"`
-	Estado       *bool    `json:"estado"`
+	ID           *string                `json:"id"`
+	Medio        string                 `json:"medio"`
+	TipoMedio    string                 `json:"tipo_medio"`
+	NumeroCuenta *string                `json:"numero_cuenta"`
+	Banco        *string                `json:"banco"`
+	SaldoInicial *float64               `json:"saldo_inicial"`
+	Estado       *database.FlexibleBool `json:"estado"`
 }
 
 type inputSaldo struct {
@@ -41,7 +42,7 @@ func (h *MedioHandler) Create(w http.ResponseWriter, r *http.Request) {
 		saldo = *input.SaldoInicial
 	}
 
-	id, err := h.DB.CreateMedio(r.Context(), input.Medio, input.TipoMedio, input.NumeroCuenta, input.Banco, saldo)
+	id, err := h.DB.CreateMedio(r.Context(), input.ID, input.Medio, input.TipoMedio, input.NumeroCuenta, input.Banco, saldo)
 	if err != nil {
 		http.Error(w, `{"error": "`+err.Error()+`"}`, http.StatusInternalServerError)
 		return
@@ -106,7 +107,7 @@ func (h *MedioHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	estado := true
 	if input.Estado != nil {
-		estado = *input.Estado
+		estado = input.Estado.Bool()
 	}
 
 	updatedID, err := h.DB.UpdateMedio(r.Context(), id, input.Medio, input.TipoMedio, input.NumeroCuenta, input.Banco, estado)

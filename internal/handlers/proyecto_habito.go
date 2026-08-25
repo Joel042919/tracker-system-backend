@@ -14,11 +14,11 @@ type ProyectoHabitoHandler struct {
 }
 
 type inputProyectoHabito struct {
-	IDProyecto         int         `json:"id_proyecto"`
-	DiasSemana         interface{} `json:"dias_semana"` // string o map/object
-	HoraObjetivo       *string     `json:"hora_objetivo"`
-	PointsPorCompletar *int        `json:"points_por_completar"`
-	Activo             *bool       `json:"activo"`
+	IDProyecto         int                    `json:"id_proyecto"`
+	DiasSemana         interface{}            `json:"dias_semana"` // string o map/object
+	HoraObjetivo       *string                `json:"hora_objetivo"`
+	PointsPorCompletar *int                   `json:"points_por_completar"`
+	Activo             *database.FlexibleBool `json:"activo"`
 }
 
 func parseDiasSemana(raw interface{}) (string, error) {
@@ -141,7 +141,7 @@ func (h *ProyectoHabitoHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	activo := true
 	if input.Activo != nil {
-		activo = *input.Activo
+		activo = input.Activo.Bool()
 	}
 
 	updatedID, err := h.DB.UpdateProyectoHabito(r.Context(), id, diasSemana, input.HoraObjetivo, points, activo)

@@ -14,10 +14,10 @@ type RegistroTareaHandler struct {
 }
 
 type inputRegistroTarea struct {
-	IDProyectoTarea   int   `json:"id_proyecto_tarea"`
-	IDRegistroHabito  int   `json:"id_registro_habito"`
-	Completado        bool  `json:"completado"`
-	TiempoRealMinutos *int  `json:"tiempo_real_minutos"`
+	IDProyectoTarea   int                   `json:"id_proyecto_tarea"`
+	IDRegistroHabito  int                   `json:"id_registro_habito"`
+	Completado        database.FlexibleBool `json:"completado"`
+	TiempoRealMinutos *int                  `json:"tiempo_real_minutos"`
 }
 
 // Create maneja POST /api/registro-tareas (hace upsert para evitar duplicados)
@@ -33,7 +33,7 @@ func (h *RegistroTareaHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rt, err := h.DB.UpsertRegistroTarea(r.Context(), input.IDRegistroHabito, input.IDProyectoTarea, input.Completado, input.TiempoRealMinutos)
+	rt, err := h.DB.UpsertRegistroTarea(r.Context(), input.IDRegistroHabito, input.IDProyectoTarea, input.Completado.Bool(), input.TiempoRealMinutos)
 	if err != nil {
 		http.Error(w, `{"error": "Error registrando tarea: `+err.Error()+`"}`, http.StatusInternalServerError)
 		return
@@ -117,7 +117,7 @@ func (h *RegistroTareaHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	updatedRT, err := h.DB.UpsertRegistroTarea(r.Context(), rt.IDRegistroHabito, rt.IDProyectoTarea, input.Completado, input.TiempoRealMinutos)
+	updatedRT, err := h.DB.UpsertRegistroTarea(r.Context(), rt.IDRegistroHabito, rt.IDProyectoTarea, input.Completado.Bool(), input.TiempoRealMinutos)
 	if err != nil {
 		http.Error(w, `{"error": "Error actualizando registro_tarea"}`, http.StatusInternalServerError)
 		return

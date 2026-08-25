@@ -22,13 +22,22 @@ type Presupuesto struct {
 }
 
 // CreatePresupuesto inserta un nuevo presupuesto
-func (db *DB) CreatePresupuesto(ctx context.Context, nombre string, categoriaID *string, montoLimite float64, periodo string, fechaInicio time.Time, fechaFin *time.Time) (string, error) {
-	query := `INSERT INTO presupuesto (nombre, categoria_id, monto_limite, periodo, fecha_inicio, fecha_fin)
-		VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`
-
-	var id string
-	err := db.Pool.QueryRow(ctx, query, nombre, categoriaID, montoLimite, periodo, fechaInicio, fechaFin).Scan(&id)
-	return id, err
+func (db *DB) CreatePresupuesto(ctx context.Context, id *string, nombre string, categoriaID *string, montoLimite float64, periodo string, fechaInicio time.Time, fechaFin *time.Time) (string, error) {
+	var presID string
+	var query string
+	var err error
+	if id != nil && *id != "" {
+		query = `INSERT INTO presupuesto (id, nombre, categoria_id, monto_limite, periodo, fecha_inicio, fecha_fin)
+			VALUES ($1, $2, $3, $4, $5, $6, $7)
+			ON CONFLICT (id) DO UPDATE SET nombre = EXCLUDED.nombre, categoria_id = EXCLUDED.categoria_id, monto_limite = EXCLUDED.monto_limite, periodo = EXCLUDED.periodo
+			RETURNING id`
+		err = db.Pool.QueryRow(ctx, query, *id, nombre, categoriaID, montoLimite, periodo, fechaInicio, fechaFin).Scan(&presID)
+	} else {
+		query = `INSERT INTO presupuesto (nombre, categoria_id, monto_limite, periodo, fecha_inicio, fecha_fin)
+			VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`
+		err = db.Pool.QueryRow(ctx, query, nombre, categoriaID, montoLimite, periodo, fechaInicio, fechaFin).Scan(&presID)
+	}
+	return presID, err
 }
 
 // GetPresupuestos obtiene todos los presupuestos activos

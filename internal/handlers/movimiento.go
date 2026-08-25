@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 	"time"
 	"tracker/internal/database"
@@ -12,6 +13,7 @@ type MovimientoHandler struct {
 }
 
 type inputMovimiento struct {
+	ID              *string   `json:"id"`
 	MedioID         string    `json:"medio_id"`
 	CategoriaID     *string   `json:"categoria_id"`
 	Tipo            string    `json:"tipo"` // 'I' o 'E'
@@ -44,22 +46,27 @@ func parseMovFecha(raw *string) time.Time {
 func (h *MovimientoHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var input inputMovimiento
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
-		http.Error(w, `{"error": "JSON inválido"}`, http.StatusBadRequest)
+		log.Printf("❌ [POST /api/movimientos] Error decodificando JSON: %v", err)
+		http.Error(w, `{"error": "JSON inválido: `+err.Error()+`"}`, http.StatusBadRequest)
 		return
 	}
 
 	if input.MedioID == "" || (input.Tipo != "I" && input.Tipo != "E") || input.Monto <= 0 {
+		log.Printf("❌ [POST /api/movimientos] Validación falló: medio_id='%s', tipo='%s', monto=%.2f", input.MedioID, input.Tipo, input.Monto)
 		http.Error(w, `{"error": "medio_id, tipo ('I' o 'E') y monto (>0) son requeridos"}`, http.StatusBadRequest)
 		return
 	}
 
 	fecha := parseMovFecha(input.FechaMovimiento)
 
-	id, err := h.DB.CreateMovimiento(r.Context(), input.MedioID, input.CategoriaID, input.Tipo, fecha, input.Descripcion, input.Monto, input.EgresoFijoID)
+	id, err := h.DB.CreateMovimiento(r.Context(), input.ID, input.MedioID, input.CategoriaID, input.Tipo, fecha, input.Descripcion, input.Monto, input.EgresoFijoID)
 	if err != nil {
+		log.Printf("❌ [POST /api/movimientos] Error en base de datos: %v", err)
 		http.Error(w, `{"error": "`+err.Error()+`"}`, http.StatusInternalServerError)
 		return
 	}
+
+	log.Printf("✅ [POST /api/movimientos] Movimiento guardado: id=%s, monto=%.2f, tipo=%s", id, input.Monto, input.Tipo)
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)

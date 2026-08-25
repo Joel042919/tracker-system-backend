@@ -23,15 +23,24 @@ type PagoProgramado struct {
 }
 
 // CreatePagoProgramado inserta un pago programado manual
-func (db *DB) CreatePagoProgramado(ctx context.Context, egresoFijoID string, fechaProgramada time.Time, monto float64, notas *string) (string, error) {
-	query := `INSERT INTO pago_programado (egreso_fijo_id, fecha_programada, monto_esperado, notas)
-		VALUES ($1, $2, $3, $4)
-		ON CONFLICT (egreso_fijo_id, fecha_programada) DO UPDATE SET monto_esperado = EXCLUDED.monto_esperado
-		RETURNING id`
-
-	var id string
-	err := db.Pool.QueryRow(ctx, query, egresoFijoID, fechaProgramada, monto, notas).Scan(&id)
-	return id, err
+func (db *DB) CreatePagoProgramado(ctx context.Context, id *string, egresoFijoID string, fechaProgramada time.Time, monto float64, notas *string) (string, error) {
+	var pID string
+	var query string
+	var err error
+	if id != nil && *id != "" {
+		query = `INSERT INTO pago_programado (id, egreso_fijo_id, fecha_programada, monto_esperado, notas)
+			VALUES ($1, $2, $3, $4, $5)
+			ON CONFLICT (egreso_fijo_id, fecha_programada) DO UPDATE SET monto_esperado = EXCLUDED.monto_esperado
+			RETURNING id`
+		err = db.Pool.QueryRow(ctx, query, *id, egresoFijoID, fechaProgramada, monto, notas).Scan(&pID)
+	} else {
+		query = `INSERT INTO pago_programado (egreso_fijo_id, fecha_programada, monto_esperado, notas)
+			VALUES ($1, $2, $3, $4)
+			ON CONFLICT (egreso_fijo_id, fecha_programada) DO UPDATE SET monto_esperado = EXCLUDED.monto_esperado
+			RETURNING id`
+		err = db.Pool.QueryRow(ctx, query, egresoFijoID, fechaProgramada, monto, notas).Scan(&pID)
+	}
+	return pID, err
 }
 
 // GetPagosProgramados obtiene todos los pagos programados ordenados por fecha

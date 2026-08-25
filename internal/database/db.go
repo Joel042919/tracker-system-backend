@@ -14,18 +14,21 @@ type DB struct {
 }
 
 func Connect() (*DB, error) {
-	dbURL := os.Getenv("DATABASE_URL")
-	if dbURL == "" {
-		return nil, fmt.Errorf("DATABASE_URL no esta configurada en el entorno")
+	connStr := os.Getenv("DATABASE_URL")
+	if connStr == "" {
+		return nil, fmt.Errorf("la variable DATABASE_URL no está definida")
 	}
 
-	// pgxpool maneja múltiples conexiones concurrentes de forma automática
-	pool, err := pgxpool.New(context.Background(), dbURL)
+	config, err := pgxpool.ParseConfig(connStr)
 	if err != nil {
-		return nil, fmt.Errorf("error conectando a la base de datos: %w", err)
+		return nil, fmt.Errorf("error al parsear configuración de la base de datos: %w", err)
 	}
 
-	// Verificamos que la conexión esté viva
+	pool, err := pgxpool.NewWithConfig(context.Background(), config)
+	if err != nil {
+		return nil, fmt.Errorf("error al conectar a la base de datos: %w", err)
+	}
+
 	if err := pool.Ping(context.Background()); err != nil {
 		return nil, fmt.Errorf("error en el ping a la base de datos: %w", err)
 	}
@@ -36,7 +39,7 @@ func Connect() (*DB, error) {
 
 func (db *DB) Migrate() error {
 	schema := `
-		CREATE TABLE area (
+		CREATE TABLE IF NOT EXISTS area (
 		id SERIAL PRIMARY KEY,
 		nombre VARCHAR(50) NOT NULL,
 		descripcion TEXT,
@@ -44,7 +47,7 @@ func (db *DB) Migrate() error {
 		created_at TIMESTAMPTZ DEFAULT now()
 		);
 
-		CREATE TABLE proyecto (
+		CREATE TABLE IF NOT EXISTS proyecto (
 		id SERIAL PRIMARY KEY,
 		id_area INT NOT NULL REFERENCES area(id),
 		nombre VARCHAR(100) NOT NULL,
@@ -57,7 +60,7 @@ func (db *DB) Migrate() error {
 		created_at TIMESTAMPTZ DEFAULT now()
 		);
 
-		CREATE TABLE metrica (
+		CREATE TABLE IF NOT EXISTS metrica (
 		id SERIAL PRIMARY KEY,
 		id_area INT NOT NULL REFERENCES area(id),
 		nombre VARCHAR(100) NOT NULL,
@@ -69,7 +72,7 @@ func (db *DB) Migrate() error {
 		created_at TIMESTAMPTZ DEFAULT now()
 		);
 
-		CREATE TABLE proyecto_metrica (
+		CREATE TABLE IF NOT EXISTS proyecto_metrica (
 		id SERIAL PRIMARY KEY,
 		id_proyecto INT NOT NULL REFERENCES proyecto(id),
 		id_metrica INT NOT NULL REFERENCES metrica(id),
@@ -78,7 +81,7 @@ func (db *DB) Migrate() error {
 		created_at TIMESTAMPTZ DEFAULT now()
 		);
 
-		CREATE TABLE registro_evaluacion (
+		CREATE TABLE IF NOT EXISTS registro_evaluacion (
 		id SERIAL PRIMARY KEY,
 		id_proyecto_metrica INT NOT NULL REFERENCES proyecto_metrica(id),
 		fecha_evaluacion TIMESTAMPTZ NOT NULL,
@@ -87,7 +90,7 @@ func (db *DB) Migrate() error {
 		created_at TIMESTAMPTZ DEFAULT now()
 		);
 
-		CREATE TABLE rewards (
+		CREATE TABLE IF NOT EXISTS rewards (
 		id SERIAL PRIMARY KEY,
 		reward VARCHAR(50) NOT NULL,
 		points_need INT NOT NULL,
@@ -95,13 +98,13 @@ func (db *DB) Migrate() error {
 		estado BOOLEAN DEFAULT true
 		);
 
-		CREATE TABLE puntos_usados (
+		CREATE TABLE IF NOT EXISTS puntos_usados (
 		id SERIAL PRIMARY KEY,
 		id_reward INT NOT NULL REFERENCES rewards(id),
 		reclaim_date TIMESTAMPTZ DEFAULT now()
 		);
 
-		CREATE TABLE task (
+		CREATE TABLE IF NOT EXISTS task (
 		id SERIAL PRIMARY KEY,
 		taskname VARCHAR(50) NOT NULL,
 		description TEXT,
@@ -111,7 +114,7 @@ func (db *DB) Migrate() error {
 		created_at TIMESTAMPTZ DEFAULT now()
 		);
 
-		CREATE TABLE proyecto_habito (
+		CREATE TABLE IF NOT EXISTS proyecto_habito (
 		id SERIAL PRIMARY KEY,
 		id_proyecto INT NOT NULL REFERENCES proyecto(id),
 		dias_semana JSONB NOT NULL,
@@ -124,7 +127,7 @@ func (db *DB) Migrate() error {
 		created_at TIMESTAMPTZ DEFAULT now()
 		);
 
-		CREATE TABLE proyecto_tarea (
+		CREATE TABLE IF NOT EXISTS proyecto_tarea (
 		id SERIAL PRIMARY KEY,
 		id_proyecto_habito INT NOT NULL REFERENCES proyecto_habito(id),
 		nombre VARCHAR(100) NOT NULL,
@@ -135,7 +138,7 @@ func (db *DB) Migrate() error {
 		created_at TIMESTAMPTZ DEFAULT now()
 		);
 
-		CREATE TABLE registro_habito (
+		CREATE TABLE IF NOT EXISTS registro_habito (
 		id SERIAL PRIMARY KEY,
 		id_proyecto_habito INT NOT NULL REFERENCES proyecto_habito(id),
 		fecha DATE NOT NULL,
@@ -148,7 +151,7 @@ func (db *DB) Migrate() error {
 		UNIQUE (id_proyecto_habito, fecha)
 		);
 
-		CREATE TABLE registro_tarea (
+		CREATE TABLE IF NOT EXISTS registro_tarea (
 		id SERIAL PRIMARY KEY,
 		id_proyecto_tarea INT NOT NULL REFERENCES proyecto_tarea(id),
 		id_registro_habito INT NOT NULL REFERENCES registro_habito(id),
@@ -159,7 +162,7 @@ func (db *DB) Migrate() error {
 		UNIQUE (id_registro_habito, id_proyecto_tarea)
 		);
 
-		CREATE TABLE puntos_ganados (
+		CREATE TABLE IF NOT EXISTS puntos_ganados (
 		id SERIAL PRIMARY KEY,
 		id_registro_evaluacion INT REFERENCES registro_evaluacion(id),
 		id_task INT REFERENCES task(id),
@@ -169,7 +172,7 @@ func (db *DB) Migrate() error {
 		fecha_registro TIMESTAMPTZ DEFAULT now()
 		);
 
-		CREATE TABLE formulario (
+		CREATE TABLE IF NOT EXISTS formulario (
 		idFormulario UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 		gender VARCHAR(6),
 		edad INT,
@@ -185,7 +188,7 @@ func (db *DB) Migrate() error {
 		active BOOLEAN DEFAULT true
 		);
 
-		CREATE TABLE macros (
+		CREATE TABLE IF NOT EXISTS macros (
 		idMacro UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 		idFormulario UUID NOT NULL REFERENCES formulario(idFormulario),
 		Calories INT,
@@ -196,7 +199,7 @@ func (db *DB) Migrate() error {
 		water NUMERIC(4,2)
 		);
 
-		CREATE TABLE dayliTrack (
+		CREATE TABLE IF NOT EXISTS dayliTrack (
 		idDayliTrack UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 		idMacro UUID REFERENCES macros(idMacro),
 		caloriesCount INT,
@@ -208,7 +211,7 @@ func (db *DB) Migrate() error {
 		dateTrack DATE NOT NULL DEFAULT CURRENT_DATE
 		);
 
-		CREATE TABLE foodLog (
+		CREATE TABLE IF NOT EXISTS foodLog (
 		idFoodLog UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 		idDayliTrack UUID NOT NULL REFERENCES dayliTrack(idDayliTrack),
 		type_meal VARCHAR(10) CHECK (type_meal IN ('breakfast','lunch','dinner','snack')),
@@ -221,7 +224,7 @@ func (db *DB) Migrate() error {
 		created_at TIMESTAMPTZ DEFAULT now()
 		);
 
-		CREATE TABLE medio (
+		CREATE TABLE IF NOT EXISTS medio (
 		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 		medio VARCHAR(50) NOT NULL,
 		tipo_medio VARCHAR(50) NOT NULL,
@@ -231,18 +234,20 @@ func (db *DB) Migrate() error {
 		created_at TIMESTAMPTZ DEFAULT now()
 		);
 
-		CREATE TABLE saldo_actual (
+		CREATE TABLE IF NOT EXISTS saldo_actual (
 		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 		saldo DECIMAL(10,2) NOT NULL DEFAULT 0.00,
 		medio_id UUID NOT NULL UNIQUE REFERENCES medio(id) ON DELETE CASCADE
 		);
 
-		CREATE TABLE categoria (
+		CREATE UNIQUE INDEX IF NOT EXISTS idx_saldo_actual_medio_id ON saldo_actual (medio_id);
+
+		CREATE TABLE IF NOT EXISTS categoria (
 		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 		categoria VARCHAR(30) NOT NULL
 		);
 
-		CREATE TABLE egreso_fijo (
+		CREATE TABLE IF NOT EXISTS egreso_fijo (
 		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 		razon VARCHAR(50) NOT NULL,
 		descripcion TEXT,
@@ -256,7 +261,7 @@ func (db *DB) Migrate() error {
 		created_at TIMESTAMPTZ DEFAULT now()
 		);
 
-		CREATE TABLE movimiento (
+		CREATE TABLE IF NOT EXISTS movimiento (
 		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 		medio_id UUID NOT NULL REFERENCES medio(id) ON DELETE CASCADE,
 		categoria_id UUID REFERENCES categoria(id) ON DELETE SET NULL,
@@ -268,7 +273,7 @@ func (db *DB) Migrate() error {
 		created_at TIMESTAMPTZ DEFAULT now()
 		);
 
-		CREATE TABLE pago_programado (
+		CREATE TABLE IF NOT EXISTS pago_programado (
 		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 		egreso_fijo_id UUID NOT NULL REFERENCES egreso_fijo(id) ON DELETE CASCADE,
 		fecha_programada DATE NOT NULL,
@@ -282,7 +287,7 @@ func (db *DB) Migrate() error {
 		UNIQUE (egreso_fijo_id, fecha_programada)
 		);
 
-		CREATE TABLE presupuesto (
+		CREATE TABLE IF NOT EXISTS presupuesto (
 		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 		nombre VARCHAR(100) NOT NULL,
 		categoria_id UUID REFERENCES categoria(id) ON DELETE SET NULL,
@@ -294,7 +299,7 @@ func (db *DB) Migrate() error {
 		created_at TIMESTAMPTZ DEFAULT now()
 		);
 
-		CREATE TABLE alerta_pago (
+		CREATE TABLE IF NOT EXISTS alerta_pago (
 		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 		pago_programado_id UUID NOT NULL REFERENCES pago_programado(id) ON DELETE CASCADE,
 		tipo_alerta VARCHAR(20) NOT NULL,

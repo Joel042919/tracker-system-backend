@@ -14,12 +14,12 @@ type ProyectoTareaHandler struct {
 }
 
 type inputProyectoTarea struct {
-	IDProyectoHabito      int    `json:"id_proyecto_habito"`
-	Nombre                string `json:"nombre"`
-	Descripcion           string `json:"descripcion"`
-	TiempoEstimadoMinutos int    `json:"tiempo_estimado_minutos"`
-	Orden                 int    `json:"orden"`
-	Activo                *bool  `json:"activo"`
+	IDProyectoHabito      int                    `json:"id_proyecto_habito"`
+	Nombre                string                 `json:"nombre"`
+	Descripcion           string                 `json:"descripcion"`
+	TiempoEstimadoMinutos int                    `json:"tiempo_estimado_minutos"`
+	Orden                 int                    `json:"orden"`
+	Activo                *database.FlexibleBool `json:"activo"`
 }
 
 // Create maneja POST /api/proyecto-tareas
@@ -118,7 +118,7 @@ func (h *ProyectoTareaHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	activo := true
 	if input.Activo != nil {
-		activo = *input.Activo
+		activo = input.Activo.Bool()
 	}
 
 	updatedID, err := h.DB.UpdateProyectoTarea(r.Context(), id, input.Nombre, input.Descripcion, input.TiempoEstimadoMinutos, input.Orden, activo)

@@ -12,15 +12,16 @@ type EgresoFijoHandler struct {
 }
 
 type inputEgresoFijo struct {
-	Razon                 string      `json:"razon"`
-	Descripcion           *string     `json:"descripcion"`
-	CategoriaID           *string     `json:"categoria_id"`
-	Monto                 float64     `json:"monto"`
-	ProgramacionPago      interface{} `json:"programacion_pago"`
-	RecordatorioDiasAntes *int        `json:"recordatorio_dias_antes"`
-	Activo                *bool       `json:"activo"`
-	FechaInicio           *string     `json:"fecha_inicio"`
-	FechaFin              *string     `json:"fecha_fin"`
+	ID                    *string                `json:"id"`
+	Razon                 string                 `json:"razon"`
+	Descripcion           *string                `json:"descripcion"`
+	CategoriaID           *string                `json:"categoria_id"`
+	Monto                 float64                `json:"monto"`
+	ProgramacionPago      interface{}            `json:"programacion_pago"`
+	RecordatorioDiasAntes *int                   `json:"recordatorio_dias_antes"`
+	Activo                *database.FlexibleBool `json:"activo"`
+	FechaInicio           *string                `json:"fecha_inicio"`
+	FechaFin              *string                `json:"fecha_fin"`
 }
 
 func parseProgPago(raw interface{}) (string, error) {
@@ -67,21 +68,21 @@ func (h *EgresoFijoHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	progStr, err := parseProgPago(input.ProgramacionPago)
+	progPagoStr, err := parseProgPago(input.ProgramacionPago)
 	if err != nil {
 		http.Error(w, `{"error": "programacion_pago inválida"}`, http.StatusBadRequest)
 		return
 	}
 
-	recordatorioDias := 3
+	recordatorio := 3
 	if input.RecordatorioDiasAntes != nil {
-		recordatorioDias = *input.RecordatorioDiasAntes
+		recordatorio = *input.RecordatorioDiasAntes
 	}
 
 	fechaInicio := parseOptionalDate(input.FechaInicio)
 	fechaFin := parseOptionalDate(input.FechaFin)
 
-	id, err := h.DB.CreateEgresoFijo(r.Context(), input.Razon, input.Descripcion, input.CategoriaID, input.Monto, progStr, recordatorioDias, fechaInicio, fechaFin)
+	id, err := h.DB.CreateEgresoFijo(r.Context(), input.ID, input.Razon, input.Descripcion, input.CategoriaID, input.Monto, progPagoStr, recordatorio, fechaInicio, fechaFin)
 	if err != nil {
 		http.Error(w, `{"error": "`+err.Error()+`"}`, http.StatusInternalServerError)
 		return
@@ -152,7 +153,7 @@ func (h *EgresoFijoHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	activo := true
 	if input.Activo != nil {
-		activo = *input.Activo
+		activo = input.Activo.Bool()
 	}
 
 	fechaInicio := parseOptionalDate(input.FechaInicio)

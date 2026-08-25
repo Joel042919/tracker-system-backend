@@ -17,13 +17,22 @@ type AlertaPago struct {
 }
 
 // CreateAlertaPago inserta una alerta de pago
-func (db *DB) CreateAlertaPago(ctx context.Context, pagoProgramadoID, tipoAlerta, mensaje string, fechaAlerta time.Time) (string, error) {
-	query := `INSERT INTO alerta_pago (pago_programado_id, tipo_alerta, mensaje, fecha_alerta)
-		VALUES ($1, $2, $3, $4) RETURNING id`
-
-	var id string
-	err := db.Pool.QueryRow(ctx, query, pagoProgramadoID, tipoAlerta, mensaje, fechaAlerta).Scan(&id)
-	return id, err
+func (db *DB) CreateAlertaPago(ctx context.Context, id *string, pagoProgramadoID, tipoAlerta, mensaje string, fechaAlerta time.Time) (string, error) {
+	var aID string
+	var query string
+	var err error
+	if id != nil && *id != "" {
+		query = `INSERT INTO alerta_pago (id, pago_programado_id, tipo_alerta, mensaje, fecha_alerta)
+			VALUES ($1, $2, $3, $4, $5)
+			ON CONFLICT (id) DO NOTHING
+			RETURNING id`
+		err = db.Pool.QueryRow(ctx, query, *id, pagoProgramadoID, tipoAlerta, mensaje, fechaAlerta).Scan(&aID)
+	} else {
+		query = `INSERT INTO alerta_pago (pago_programado_id, tipo_alerta, mensaje, fecha_alerta)
+			VALUES ($1, $2, $3, $4) RETURNING id`
+		err = db.Pool.QueryRow(ctx, query, pagoProgramadoID, tipoAlerta, mensaje, fechaAlerta).Scan(&aID)
+	}
+	return aID, err
 }
 
 // GetAlertasPago obtiene las alertas ordenadas por fecha

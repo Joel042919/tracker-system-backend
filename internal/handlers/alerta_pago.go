@@ -12,6 +12,7 @@ type AlertaPagoHandler struct {
 }
 
 type inputAlertaPago struct {
+	ID               *string `json:"id"`
 	PagoProgramadoID string  `json:"pago_programado_id"`
 	TipoAlerta       string  `json:"tipo_alerta"`
 	Mensaje          string  `json:"mensaje"`
@@ -19,7 +20,7 @@ type inputAlertaPago struct {
 }
 
 type inputMarcarLeida struct {
-	Leida bool `json:"leida"`
+	Leida database.FlexibleBool `json:"leida"`
 }
 
 // Create maneja POST /api/alertas-pago
@@ -42,7 +43,7 @@ func (h *AlertaPagoHandler) Create(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	id, err := h.DB.CreateAlertaPago(r.Context(), input.PagoProgramadoID, input.TipoAlerta, input.Mensaje, fecha)
+	id, err := h.DB.CreateAlertaPago(r.Context(), input.ID, input.PagoProgramadoID, input.TipoAlerta, input.Mensaje, fecha)
 	if err != nil {
 		http.Error(w, `{"error": "`+err.Error()+`"}`, http.StatusInternalServerError)
 		return
@@ -82,7 +83,7 @@ func (h *AlertaPagoHandler) MarcarLeida(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	updatedID, err := h.DB.MarcarAlertaLeida(r.Context(), id, input.Leida)
+	updatedID, err := h.DB.MarcarAlertaLeida(r.Context(), id, input.Leida.Bool())
 	if err != nil {
 		http.Error(w, `{"error": "`+err.Error()+`"}`, http.StatusInternalServerError)
 		return

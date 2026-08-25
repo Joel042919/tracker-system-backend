@@ -15,13 +15,13 @@ type RegistroHabitoHandler struct {
 }
 
 type inputRegistroHabito struct {
-	IDProyectoHabito int     `json:"id_proyecto_habito"`
-	Fecha            *string `json:"fecha"` // YYYY-MM-DD o ISO
-	Completado       *bool   `json:"completado"`
-	FechaCompletado  *string `json:"fecha_completado"`
-	PointsGanados    *int    `json:"points_ganados"`
-	StreakActual     *int    `json:"streak_actual"`
-	Notas            *string `json:"notas"`
+	IDProyectoHabito int                    `json:"id_proyecto_habito"`
+	Fecha            *string                `json:"fecha"` // YYYY-MM-DD o ISO
+	Completado       *database.FlexibleBool `json:"completado"`
+	FechaCompletado  *string                `json:"fecha_completado"`
+	PointsGanados    *int                   `json:"points_ganados"`
+	StreakActual     *int                   `json:"streak_actual"`
+	Notas            *string                `json:"notas"`
 }
 
 func parseFecha(fStr *string) time.Time {
@@ -122,7 +122,7 @@ func (h *RegistroHabitoHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	completado := false
 	if input.Completado != nil {
-		completado = *input.Completado
+		completado = input.Completado.Bool()
 	}
 
 	var fechaCompletado *time.Time
