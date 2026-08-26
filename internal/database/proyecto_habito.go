@@ -99,14 +99,55 @@ func (db *DB) GetProyectoHabitoByProyectoID(ctx context.Context, idProyecto int)
 	return ph, nil
 }
 
-// UpdateProyectoHabito actualiza un proyecto_habito
-func (db *DB) UpdateProyectoHabito(ctx context.Context, id int, diasSemana string, horaObjetivo *string, pointsPorCompletar int, activo bool) (int, error) {
+// UpdateProyectoHabito actualiza un proyecto_habito de forma parcial o total
+func (db *DB) UpdateProyectoHabito(ctx context.Context, id int, diasSemana *string, horaObjetivo *string, pointsPorCompletar *int, recordStreak *int, bestStreak *int, ultimaFechaCompletada *time.Time, activo *bool) (int, error) {
+	current, err := db.GetProyectoHabito(ctx, id)
+	if err != nil {
+		return 0, err
+	}
+
+	finalDiasSemana := string(current.DiasSemana)
+	if diasSemana != nil && *diasSemana != "" && *diasSemana != "{}" {
+		finalDiasSemana = *diasSemana
+	}
+
+	finalHoraObjetivo := current.HoraObjetivo
+	if horaObjetivo != nil {
+		finalHoraObjetivo = horaObjetivo
+	}
+
+	finalPoints := current.PointsPorCompletar
+	if pointsPorCompletar != nil {
+		finalPoints = *pointsPorCompletar
+	}
+
+	finalRecordStreak := current.RecordStreak
+	if recordStreak != nil {
+		finalRecordStreak = *recordStreak
+	}
+
+	finalBestStreak := current.BestStreak
+	if bestStreak != nil {
+		finalBestStreak = *bestStreak
+	}
+
+	finalUltimaFecha := current.UltimaFechaCompletada
+	if ultimaFechaCompletada != nil {
+		finalUltimaFecha = ultimaFechaCompletada
+	}
+
+	finalActivo := current.Activo
+	if activo != nil {
+		finalActivo = *activo
+	}
+
 	query := `UPDATE proyecto_habito
-		SET dias_semana = $1::jsonb, hora_objetivo = $2, points_por_completar = $3, activo = $4
-		WHERE id = $5 RETURNING id`
+		SET dias_semana = $1::jsonb, hora_objetivo = $2, points_por_completar = $3,
+		    record_streak = $4, best_streak = $5, ultima_fecha_completada = $6, activo = $7
+		WHERE id = $8 RETURNING id`
 
 	var updatedID int
-	err := db.Pool.QueryRow(ctx, query, diasSemana, horaObjetivo, pointsPorCompletar, activo, id).Scan(&updatedID)
+	err = db.Pool.QueryRow(ctx, query, finalDiasSemana, finalHoraObjetivo, finalPoints, finalRecordStreak, finalBestStreak, finalUltimaFecha, finalActivo, id).Scan(&updatedID)
 	return updatedID, err
 }
 

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"time"
 	"tracker/internal/database"
 )
 
@@ -14,11 +15,14 @@ type ProyectoHabitoHandler struct {
 }
 
 type inputProyectoHabito struct {
-	IDProyecto         int                    `json:"id_proyecto"`
-	DiasSemana         interface{}            `json:"dias_semana"` // string o map/object
-	HoraObjetivo       *string                `json:"hora_objetivo"`
-	PointsPorCompletar *int                   `json:"points_por_completar"`
-	Activo             *database.FlexibleBool `json:"activo"`
+	IDProyecto            *int                   `json:"id_proyecto"`
+	DiasSemana            interface{}            `json:"dias_semana"` // string o map/object
+	HoraObjetivo          *string                `json:"hora_objetivo"`
+	PointsPorCompletar    *int                   `json:"points_por_completar"`
+	RecordStreak          *int                   `json:"record_streak"`
+	BestStreak            *int                   `json:"best_streak"`
+	UltimaFechaCompletada *string                `json:"ultima_fecha_completada"`
+	Activo                *database.FlexibleBool `json:"activo"`
 }
 
 func parseDiasSemana(raw interface{}) (string, error) {
@@ -45,7 +49,7 @@ func (h *ProyectoHabitoHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if input.IDProyecto <= 0 {
+	if input.IDProyecto == nil || *input.IDProyecto <= 0 {
 		http.Error(w, `{"error": "id_proyecto es requerido"}`, http.StatusBadRequest)
 		return
 	}
@@ -61,9 +65,9 @@ func (h *ProyectoHabitoHandler) Create(w http.ResponseWriter, r *http.Request) {
 		points = *input.PointsPorCompletar
 	}
 
-	id, err := h.DB.CreateProyectoHabito(r.Context(), input.IDProyecto, diasSemana, input.HoraObjetivo, points)
+	id, err := h.DB.CreateProyectoHabito(r.Context(), *input.IDProyecto, diasSemana, input.HoraObjetivo, points)
 	if err != nil {
-		http.Error(w, `{"error": "Error creando proyecto_habito: `+err.Error()+`"}`, http.StatusInternalServerError)
+		http.Error(w, `{"error": "Error creando proyecto_habito"}`, http.StatusInternalServerError)
 		return
 	}
 
@@ -77,17 +81,17 @@ func (h *ProyectoHabitoHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 // GetAll maneja GET /api/proyecto-habitos
 func (h *ProyectoHabitoHandler) GetAll(w http.ResponseWriter, r *http.Request) {
-	lista, err := h.DB.GetProyectoHabitos(r.Context())
+	habitos, err := h.DB.GetProyectoHabitos(r.Context())
 	if err != nil {
 		http.Error(w, `{"error": "Error obteniendo proyecto_habitos"}`, http.StatusInternalServerError)
 		return
 	}
-	if lista == nil {
-		lista = []database.ProyectoHabito{}
+	if habitos == nil {
+		habitos = []database.ProyectoHabito{}
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(lista)
+	json.NewEncoder(w).Encode(habitos)
 }
 
 // GetByID maneja GET /api/proyecto-habitos/{id}
@@ -128,25 +132,40 @@ func (h *ProyectoHabitoHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	diasSemana, err := parseDiasSemana(input.DiasSemana)
-	if err != nil {
-		http.Error(w, `{"error": "dias_semana inválido"}`, http.StatusBadRequest)
-		return
+	var diasSemanaPtr *string
+	if input.DiasSemana != nil {
+		ds, err := parseDiasSemana(input.DiasSemana)
+		if err == nil && ds != "" && ds != "{}" {
+			diasSemanaPtr = &ds
+		}
 	}
 
-	points := 10
-	if input.PointsPorCompletar != nil {
-		points = *input.PointsPorCompletar
-	}
-
-	activo := true
+	var boolActivo *bool
 	if input.Activo != nil {
-		activo = input.Activo.Bool()
+		val := input.Activo.Bool()
+		boolActivo = &val
 	}
 
-	updatedID, err := h.DB.UpdateProyectoHabito(r.Context(), id, diasSemana, input.HoraObjetivo, points, activo)
+	var ultimaFecha *time.Time
+	if input.UltimaFechaCompletada != nil && *input.UltimaFechaCompletada != "" {
+		parsed, err := time.Parse("2006-01-02", *input.UltimaFechaCompletada)
+		if err == nil {
+			ultimaFecha = &parsed
+		} else {
+			parsedIso, errIso := time.Parse(time.RFC3339, *input.UltimaFechaCompletada)
+			if errIso == nil {
+				ultimaFecha = &parsedIso
+			}
+		}
+	}
+
+	updatedID, err := h.DB.UpdateProyectoHabito(
+		r.Context(), id, diasSemanaPtr, input.HoraObjetivo,
+		input.PointsPorCompletar, input.RecordStreak, input.BestStreak,
+		ultimaFecha, boolActivo,
+	)
 	if err != nil {
-		http.Error(w, `{"error": "Error actualizando proyecto_habito"}`, http.StatusInternalServerError)
+		http.Error(w, `{"error": "Error actualizando proyecto_habito: `+err.Error()+`"}`, http.StatusInternalServerError)
 		return
 	}
 

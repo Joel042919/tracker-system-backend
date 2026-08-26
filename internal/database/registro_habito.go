@@ -21,13 +21,24 @@ type RegistroHabito struct {
 	CreatedAt        time.Time  `json:"created_at"`
 }
 
-// CreateRegistroHabito inserta un nuevo registro de hábito
+// CreateRegistroHabito inserta o actualiza un registro de hábito de forma idempotente
 func (db *DB) CreateRegistroHabito(ctx context.Context, idProyectoHabito int, fecha time.Time, completado bool, fechaCompletado *time.Time, pointsGanados, streakActual int, notas string) (int, error) {
+	var existingID int
+	err := db.Pool.QueryRow(ctx, "SELECT id FROM registro_habito WHERE id_proyecto_habito = $1 AND fecha = $2::date", idProyectoHabito, fecha).Scan(&existingID)
+	if err == nil && existingID > 0 {
+		updateQuery := `UPDATE registro_habito
+			SET completado = $1, fecha_completado = $2, points_ganados = $3, streak_actual = $4, notas = $5
+			WHERE id = $6 RETURNING id`
+		var updatedID int
+		err = db.Pool.QueryRow(ctx, updateQuery, completado, fechaCompletado, pointsGanados, streakActual, notas, existingID).Scan(&updatedID)
+		return updatedID, err
+	}
+
 	query := `INSERT INTO registro_habito (id_proyecto_habito, fecha, completado, fecha_completado, points_ganados, streak_actual, notas)
 		VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`
 
 	var id int
-	err := db.Pool.QueryRow(ctx, query, idProyectoHabito, fecha, completado, fechaCompletado, pointsGanados, streakActual, notas).Scan(&id)
+	err = db.Pool.QueryRow(ctx, query, idProyectoHabito, fecha, completado, fechaCompletado, pointsGanados, streakActual, notas).Scan(&id)
 	return id, err
 }
 

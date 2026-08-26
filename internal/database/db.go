@@ -241,6 +241,8 @@ func (db *DB) Migrate() error {
 		);
 
 		CREATE UNIQUE INDEX IF NOT EXISTS idx_saldo_actual_medio_id ON saldo_actual (medio_id);
+		CREATE UNIQUE INDEX IF NOT EXISTS idx_registro_habito_unique ON registro_habito (id_proyecto_habito, fecha);
+		CREATE UNIQUE INDEX IF NOT EXISTS idx_registro_tarea_unique ON registro_tarea (id_registro_habito, id_proyecto_tarea);
 
 		CREATE TABLE IF NOT EXISTS categoria (
 		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

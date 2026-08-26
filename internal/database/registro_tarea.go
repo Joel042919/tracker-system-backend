@@ -109,7 +109,7 @@ func (db *DB) UpdateRegistroTarea(ctx context.Context, id int, completado bool, 
 	return updatedID, err
 }
 
-// UpsertRegistroTarea marca o actualiza una tarea dentro de un registro de hábito
+// UpsertRegistroTarea marca o actualiza una tarea dentro de un registro de hábito de forma atómica y segura
 func (db *DB) UpsertRegistroTarea(ctx context.Context, idRegistroHabito, idProyectoTarea int, completado bool, tiempoRealMinutos *int) (RegistroTarea, error) {
 	var fechaCompletado *time.Time
 	if completado {
@@ -117,17 +117,50 @@ func (db *DB) UpsertRegistroTarea(ctx context.Context, idRegistroHabito, idProye
 		fechaCompletado = &now
 	}
 
-	query := `INSERT INTO registro_tarea (id_proyecto_tarea, id_registro_habito, completado, fecha_completado, tiempo_real_minutos)
-		VALUES ($1, $2, $3, $4, $5)
-		ON CONFLICT (id_registro_habito, id_proyecto_tarea)
-		DO UPDATE SET completado = EXCLUDED.completado, fecha_completado = EXCLUDED.fecha_completado, tiempo_real_minutos = EXCLUDED.tiempo_real_minutos
-		RETURNING id, id_proyecto_tarea, id_registro_habito, completado, fecha_completado, tiempo_real_minutos, created_at`
+	// 1. Validar si idRegistroHabito existe en PostgreSQL
+	var habitoRegExists bool
+	_ = db.Pool.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM registro_habito WHERE id = $1)", idRegistroHabito).Scan(&habitoRegExists)
+
+	effectiveRegHabitoID := idRegistroHabito
+	if !habitoRegExists {
+		// Si el ID del cliente no existe en PostgreSQL (por ser ID temporal de Dexie),
+		// buscamos el id_proyecto_habito de la proyecto_tarea y creamos o buscamos el registro_habito del día
+		var idProyectoHabito int
+		err := db.Pool.QueryRow(ctx, "SELECT id_proyecto_habito FROM proyecto_tarea WHERE id = $1", idProyectoTarea).Scan(&idProyectoHabito)
+		if err == nil {
+			rh, errRh := db.GetOrCreateRegistroHabito(ctx, idProyectoHabito, time.Now())
+			if errRh == nil && rh.ID > 0 {
+				effectiveRegHabitoID = rh.ID
+			}
+		}
+	}
+
+	// 2. Verificar si ya existe el registro_tarea para este hábito y tarea
+	var existingID int
+	err := db.Pool.QueryRow(ctx, "SELECT id FROM registro_tarea WHERE id_registro_habito = $1 AND id_proyecto_tarea = $2", effectiveRegHabitoID, idProyectoTarea).Scan(&existingID)
 
 	var rt RegistroTarea
-	err := db.Pool.QueryRow(ctx, query, idProyectoTarea, idRegistroHabito, completado, fechaCompletado, tiempoRealMinutos).Scan(
-		&rt.ID, &rt.IDProyectoTarea, &rt.IDRegistroHabito, &rt.Completado,
-		&rt.FechaCompletado, &rt.TiempoRealMinutos, &rt.CreatedAt,
-	)
+	if err == nil && existingID > 0 {
+		// Ya existe -> UPDATE
+		updateQuery := `UPDATE registro_tarea
+			SET completado = $1, fecha_completado = $2, tiempo_real_minutos = $3
+			WHERE id = $4
+			RETURNING id, id_proyecto_tarea, id_registro_habito, completado, fecha_completado, tiempo_real_minutos, created_at`
+		err = db.Pool.QueryRow(ctx, updateQuery, completado, fechaCompletado, tiempoRealMinutos, existingID).Scan(
+			&rt.ID, &rt.IDProyectoTarea, &rt.IDRegistroHabito, &rt.Completado,
+			&rt.FechaCompletado, &rt.TiempoRealMinutos, &rt.CreatedAt,
+		)
+	} else {
+		// No existe -> INSERT
+		insertQuery := `INSERT INTO registro_tarea (id_proyecto_tarea, id_registro_habito, completado, fecha_completado, tiempo_real_minutos)
+			VALUES ($1, $2, $3, $4, $5)
+			RETURNING id, id_proyecto_tarea, id_registro_habito, completado, fecha_completado, tiempo_real_minutos, created_at`
+		err = db.Pool.QueryRow(ctx, insertQuery, idProyectoTarea, effectiveRegHabitoID, completado, fechaCompletado, tiempoRealMinutos).Scan(
+			&rt.ID, &rt.IDProyectoTarea, &rt.IDRegistroHabito, &rt.Completado,
+			&rt.FechaCompletado, &rt.TiempoRealMinutos, &rt.CreatedAt,
+		)
+	}
+
 	return rt, err
 }
 
