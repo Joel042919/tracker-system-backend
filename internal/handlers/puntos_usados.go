@@ -37,7 +37,7 @@ func parsePuntosUsadosInput(in inputPuntosUsados) (int, time.Time, error) {
 	return in.IDReward, reclaimDate, nil
 }
 
-// Create maneja POST /api/puntos-usados
+// Create maneja POST /api/puntos-usados (atómico e idempotente)
 func (h *PuntosUsadosHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var input inputPuntosUsados
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
@@ -51,26 +51,29 @@ func (h *PuntosUsadosHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Obtener el reward para saber cuántos puntos restar
+	// Obtener el reward para saber cuántos puntos cuesta
 	reward, err := h.DB.GetReward(r.Context(), idReward)
 	if err != nil {
 		http.Error(w, `{"error": "Error al obtener reward asociado"}`, http.StatusInternalServerError)
 		return
 	}
 
-	id, err := h.DB.CreatePuntosUsados(r.Context(), idReward, reclaimDate)
+	// Ejecutar canje atómico e idempotente en base de datos
+	id, isDuplicate, err := h.DB.CreatePuntosUsadosAtomic(r.Context(), idReward, reclaimDate, reward.PointsNeed)
 	if err != nil {
-		http.Error(w, `{"error": "Error interno al crear puntos usados"}`, http.StatusInternalServerError)
+		http.Error(w, `{"error": "`+err.Error()+`"}`, http.StatusBadRequest)
 		return
 	}
 
-	// Restar puntos del total
-	go h.DB.UpdateTotalPoints(context.Background(), -reward.PointsNeed)
+	msg := "Registro de puntos usados creado exitosamente"
+	if isDuplicate {
+		msg = "Premio ya canjeado previamente (operación idempotente)"
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"message": "Registro de puntos usados creado exitosamente",
+		"message": msg,
 		"id":      id,
 	})
 }

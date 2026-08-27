@@ -54,6 +54,23 @@ func (db *DB) CreateMovimiento(ctx context.Context, id *string, medioID string, 
 		}
 	}
 
+	// 3. Verificación de Idempotencia / Deduplicación reciente (10 segundos)
+	// Previene que múltiples clics rápidos con UUIDs diferentes dupliquen el movimiento y el saldo
+	var existingDupID string
+	dupQuery := `SELECT id::text FROM movimiento 
+		WHERE medio_id = $1::uuid 
+		  AND tipo = $2 
+		  AND monto = $3 
+		  AND COALESCE(descripcion, '') = COALESCE($4, '') 
+		  AND created_at >= NOW() - INTERVAL '10 seconds'
+		ORDER BY created_at DESC LIMIT 1`
+	err = tx.QueryRow(ctx, dupQuery, medioID, tipo, monto, descripcion).Scan(&existingDupID)
+	if err == nil && existingDupID != "" {
+		// Duplicado reciente detectado -> Retornamos el id existente sin volver a descontar/sumar saldo
+		_ = tx.Commit(ctx)
+		return existingDupID, nil
+	}
+
 	var movID string
 	var query string
 	if id != nil && *id != "" {
