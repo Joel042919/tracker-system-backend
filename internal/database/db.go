@@ -310,6 +310,10 @@ func (db *DB) Migrate() error {
 		fecha_alerta TIMESTAMPTZ DEFAULT now(),
 		created_at TIMESTAMPTZ DEFAULT now()
 		);
+
+		CREATE INDEX IF NOT EXISTS idx_puntos_ganados_habito ON puntos_ganados (id_registro_habito);
+		CREATE INDEX IF NOT EXISTS idx_puntos_ganados_task ON puntos_ganados (id_task);
+		CREATE INDEX IF NOT EXISTS idx_puntos_ganados_eval ON puntos_ganados (id_registro_evaluacion);
 	`
 	_, err := db.Pool.Exec(context.Background(), schema)
 	if err != nil {

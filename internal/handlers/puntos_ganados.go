@@ -67,19 +67,21 @@ func (h *PuntosGanadosHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	id, err := h.DB.CreatePuntosGanados(r.Context(), idRegEv, idTask, idRegHab, points, tipoOrigen, fecha)
+	id, isDuplicate, err := h.DB.CreatePuntosGanadosAtomic(r.Context(), idRegEv, idTask, idRegHab, points, tipoOrigen, fecha)
 	if err != nil {
-		http.Error(w, `{"error": "Error interno al crear registro de puntos ganados"}`, http.StatusInternalServerError)
+		http.Error(w, `{"error": "Error interno al crear registro de puntos ganados: `+err.Error()+`"}`, http.StatusInternalServerError)
 		return
 	}
 
-	// Actualizar total
-	go h.DB.UpdateTotalPoints(context.Background(), points)
+	msg := "Registro de puntos ganados creado exitosamente"
+	if isDuplicate {
+		msg = "Puntos ya registrados previamente para este origen (operación idempotente)"
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"message": "Registro de puntos ganados creado exitosamente",
+		"message": msg,
 		"id":      id,
 	})
 }

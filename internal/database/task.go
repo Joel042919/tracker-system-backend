@@ -10,13 +10,13 @@ import (
 
 // Task representa la tabla task
 type Task struct {
-	ID          int          `json:"id"`
-	Taskname    string       `json:"taskname"`
-	Description string       `json:"description"`
-	DueDate     sql.NullTime `json:"due_date"` // puede ser null
-	Status      string       `json:"status"`   // do, doing, done
-	Points      int          `json:"points"`
-	CreatedAt   time.Time    `json:"created_at"`
+	ID          int        `json:"id"`
+	Taskname    string     `json:"taskname"`
+	Description string     `json:"description"`
+	DueDate     *time.Time `json:"due_date"` // puede ser null
+	Status      string     `json:"status"`   // do, doing, done
+	Points      int        `json:"points"`
+	CreatedAt   time.Time  `json:"created_at"`
 }
 
 // CreateTask inserta una nueva tarea

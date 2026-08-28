@@ -21,21 +21,49 @@ type PuntosGanados struct {
 
 // CreatePuntosGanados inserta un nuevo registro
 func (db *DB) CreatePuntosGanados(ctx context.Context, idRegistroEvaluacion, idTask, idRegistroHabito *int, points int, tipoOrigen string, fechaRegistro time.Time) (int, error) {
-	var regEvalParam, taskParam, regHabitoParam interface{}
-	if idRegistroEvaluacion != nil {
-		regEvalParam = *idRegistroEvaluacion
-	} else {
-		regEvalParam = nil
+	id, _, err := db.CreatePuntosGanadosAtomic(ctx, idRegistroEvaluacion, idTask, idRegistroHabito, points, tipoOrigen, fechaRegistro)
+	return id, err
+}
+
+// CreatePuntosGanadosAtomic inserta un nuevo registro de puntos ganados y actualiza point_review atómicamente.
+// Es completamente idempotente: si ya se otorgaron puntos para el mismo hábito, tarea o evaluación,
+// retorna el ID existente sin duplicar el registro ni sumar puntos de más.
+func (db *DB) CreatePuntosGanadosAtomic(ctx context.Context, idRegistroEvaluacion, idTask, idRegistroHabito *int, points int, tipoOrigen string, fechaRegistro time.Time) (int, bool, error) {
+	tx, err := db.Pool.Begin(ctx)
+	if err != nil {
+		return 0, false, fmt.Errorf("error iniciando transacción: %w", err)
 	}
-	if idTask != nil {
-		taskParam = *idTask
+	defer tx.Rollback(ctx)
+
+	// 1. Verificación de Idempotencia específica por origen
+	var existingID int
+	if idRegistroHabito != nil && *idRegistroHabito > 0 {
+		_ = tx.QueryRow(ctx, "SELECT id FROM puntos_ganados WHERE id_registro_habito = $1 LIMIT 1", *idRegistroHabito).Scan(&existingID)
+		if existingID > 0 {
+			_ = tx.Commit(ctx)
+			return existingID, true, nil
+		}
+	} else if idTask != nil && *idTask > 0 {
+		_ = tx.QueryRow(ctx, "SELECT id FROM puntos_ganados WHERE id_task = $1 LIMIT 1", *idTask).Scan(&existingID)
+		if existingID > 0 {
+			_ = tx.Commit(ctx)
+			return existingID, true, nil
+		}
+	} else if idRegistroEvaluacion != nil && *idRegistroEvaluacion > 0 {
+		_ = tx.QueryRow(ctx, "SELECT id FROM puntos_ganados WHERE id_registro_evaluacion = $1 LIMIT 1", *idRegistroEvaluacion).Scan(&existingID)
+		if existingID > 0 {
+			_ = tx.Commit(ctx)
+			return existingID, true, nil
+		}
 	} else {
-		taskParam = nil
-	}
-	if idRegistroHabito != nil {
-		regHabitoParam = *idRegistroHabito
-	} else {
-		regHabitoParam = nil
+		// Verificación de ventana de tiempo (10s) para peticiones idénticas generales
+		_ = tx.QueryRow(ctx, `SELECT id FROM puntos_ganados 
+			WHERE points = $1 AND tipo_origen = $2 AND fecha_registro >= NOW() - INTERVAL '10 seconds'
+			ORDER BY id DESC LIMIT 1`, points, tipoOrigen).Scan(&existingID)
+		if existingID > 0 {
+			_ = tx.Commit(ctx)
+			return existingID, true, nil
+		}
 	}
 
 	if tipoOrigen == "" {
@@ -48,12 +76,42 @@ func (db *DB) CreatePuntosGanados(ctx context.Context, idRegistroEvaluacion, idT
 		}
 	}
 
+	// 2. Insertar registro en puntos_ganados
 	query := `INSERT INTO puntos_ganados (id_registro_evaluacion, id_task, id_registro_habito, points, tipo_origen, fecha_registro)
-		VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`
+		VALUES ($1, $2, $3, $4, $5, $6)
+		RETURNING id`
 
-	var id int
-	err := db.Pool.QueryRow(ctx, query, regEvalParam, taskParam, regHabitoParam, points, tipoOrigen, fechaRegistro).Scan(&id)
-	return id, err
+	var newID int
+	err = tx.QueryRow(ctx, query, idRegistroEvaluacion, idTask, idRegistroHabito, points, tipoOrigen, fechaRegistro).Scan(&newID)
+	if err != nil {
+		// Si falló por constraint de índice único (id_registro_habito único)
+		if idRegistroHabito != nil {
+			_ = tx.QueryRow(ctx, "SELECT id FROM puntos_ganados WHERE id_registro_habito = $1 LIMIT 1", *idRegistroHabito).Scan(&newID)
+			if newID > 0 {
+				_ = tx.Commit(ctx)
+				return newID, true, nil
+			}
+		}
+		return 0, false, fmt.Errorf("error al insertar puntos_ganados: %w", err)
+	}
+
+	// 3. Sumar puntos al total global en point_review de forma síncrona y atómica
+	tag, err := tx.Exec(ctx, `UPDATE point_review SET puntos_ganados = puntos_ganados + $1 WHERE id = 1`, points)
+	if err != nil {
+		return 0, false, fmt.Errorf("error actualizando point_review: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		_, insertErr := tx.Exec(ctx, `INSERT INTO point_review (id, puntos_ganados) VALUES (1, $1) ON CONFLICT DO NOTHING`, points)
+		if insertErr != nil {
+			return 0, false, fmt.Errorf("error inicializando point_review: %w", insertErr)
+		}
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return 0, false, fmt.Errorf("error al confirmar transacción: %w", err)
+	}
+
+	return newID, false, nil
 }
 
 // GetPuntosGanados obtiene todos los registros
