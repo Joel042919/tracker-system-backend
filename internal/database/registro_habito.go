@@ -131,15 +131,45 @@ func (db *DB) GetRegistroHabitoByHabitoAndFecha(ctx context.Context, idProyectoH
 	return rh, nil
 }
 
-// UpdateRegistroHabito actualiza el estado de un registro de hábito
-func (db *DB) UpdateRegistroHabito(ctx context.Context, id int, completado bool, fechaCompletado *time.Time, pointsGanados, streakActual int, notas string) (int, error) {
+// UpdateRegistroHabito actualiza el estado de un registro de hábito por ID o hace upsert por (id_proyecto_habito, fecha) si no existe
+func (db *DB) UpdateRegistroHabito(ctx context.Context, id int, idProyectoHabito int, fecha *time.Time, completado bool, fechaCompletado *time.Time, pointsGanados, streakActual int, notas string) (int, error) {
 	query := `UPDATE registro_habito
 		SET completado = $1, fecha_completado = $2, points_ganados = $3, streak_actual = $4, notas = $5
 		WHERE id = $6 RETURNING id`
 
 	var updatedID int
 	err := db.Pool.QueryRow(ctx, query, completado, fechaCompletado, pointsGanados, streakActual, notas, id).Scan(&updatedID)
-	return updatedID, err
+	if err == nil && updatedID > 0 {
+		return updatedID, nil
+	}
+
+	// Si el ID no existe en PostgreSQL pero tenemos id_proyecto_habito (ej. ID temporal local de Dexie),
+	// hacemos upsert seguro sobre (id_proyecto_habito, fecha)
+	if idProyectoHabito > 0 {
+		var effectiveFecha time.Time
+		if fecha != nil {
+			effectiveFecha = *fecha
+		} else {
+			effectiveFecha = time.Now()
+		}
+
+		upsertQuery := `INSERT INTO registro_habito (id_proyecto_habito, fecha, completado, fecha_completado, points_ganados, streak_actual, notas)
+			VALUES ($1, $2, $3, $4, $5, $6, $7)
+			ON CONFLICT (id_proyecto_habito, fecha)
+			DO UPDATE SET
+				completado = EXCLUDED.completado,
+				fecha_completado = EXCLUDED.fecha_completado,
+				points_ganados = EXCLUDED.points_ganados,
+				streak_actual = EXCLUDED.streak_actual,
+				notas = EXCLUDED.notas
+			RETURNING id`
+		err = db.Pool.QueryRow(ctx, upsertQuery, idProyectoHabito, effectiveFecha, completado, fechaCompletado, pointsGanados, streakActual, notas).Scan(&updatedID)
+		if err == nil {
+			return updatedID, nil
+		}
+	}
+
+	return 0, err
 }
 
 // DeleteRegistroHabito elimina físicamente un registro de hábito

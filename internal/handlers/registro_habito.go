@@ -149,9 +149,15 @@ func (h *RegistroHabitoHandler) Update(w http.ResponseWriter, r *http.Request) {
 		notas = *input.Notas
 	}
 
-	updatedID, err := h.DB.UpdateRegistroHabito(r.Context(), id, completado, fechaCompletado, pointsGanados, streakActual, notas)
+	var fecha *time.Time
+	if input.Fecha != nil && *input.Fecha != "" {
+		f := parseFecha(input.Fecha)
+		fecha = &f
+	}
+
+	updatedID, err := h.DB.UpdateRegistroHabito(r.Context(), id, input.IDProyectoHabito, fecha, completado, fechaCompletado, pointsGanados, streakActual, notas)
 	if err != nil {
-		http.Error(w, `{"error": "Error actualizando registro_habito"}`, http.StatusInternalServerError)
+		http.Error(w, `{"error": "Error actualizando registro_habito: `+err.Error()+`"}`, http.StatusInternalServerError)
 		return
 	}
 

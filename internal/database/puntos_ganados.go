@@ -76,15 +76,42 @@ func (db *DB) CreatePuntosGanadosAtomic(ctx context.Context, idRegistroEvaluacio
 		}
 	}
 
-	// 2. Insertar registro en puntos_ganados
+	// 2. Validar existencia de FKs para evitar Foreign Key Violations
+	var validRegHabitoParam *int = idRegistroHabito
+	if idRegistroHabito != nil && *idRegistroHabito > 0 {
+		var exists bool
+		_ = tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM registro_habito WHERE id = $1)", *idRegistroHabito).Scan(&exists)
+		if !exists {
+			validRegHabitoParam = nil
+		}
+	}
+
+	var validTaskParam *int = idTask
+	if idTask != nil && *idTask > 0 {
+		var exists bool
+		_ = tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM task WHERE id = $1)", *idTask).Scan(&exists)
+		if !exists {
+			validTaskParam = nil
+		}
+	}
+
+	var validRegEvalParam *int = idRegistroEvaluacion
+	if idRegistroEvaluacion != nil && *idRegistroEvaluacion > 0 {
+		var exists bool
+		_ = tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM registro_evaluacion WHERE id = $1)", *idRegistroEvaluacion).Scan(&exists)
+		if !exists {
+			validRegEvalParam = nil
+		}
+	}
+
+	// 3. Insertar registro en puntos_ganados
 	query := `INSERT INTO puntos_ganados (id_registro_evaluacion, id_task, id_registro_habito, points, tipo_origen, fecha_registro)
 		VALUES ($1, $2, $3, $4, $5, $6)
 		RETURNING id`
 
 	var newID int
-	err = tx.QueryRow(ctx, query, idRegistroEvaluacion, idTask, idRegistroHabito, points, tipoOrigen, fechaRegistro).Scan(&newID)
+	err = tx.QueryRow(ctx, query, validRegEvalParam, validTaskParam, validRegHabitoParam, points, tipoOrigen, fechaRegistro).Scan(&newID)
 	if err != nil {
-		// Si falló por constraint de índice único (id_registro_habito único)
 		if idRegistroHabito != nil {
 			_ = tx.QueryRow(ctx, "SELECT id FROM puntos_ganados WHERE id_registro_habito = $1 LIMIT 1", *idRegistroHabito).Scan(&newID)
 			if newID > 0 {
